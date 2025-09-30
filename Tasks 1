@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+# Save as ~/sniffer.py and run: sudo python3 ~/sniffer.py
+
+from scapy.all import sniff, wrpcap, conf
+from scapy.layers.inet import IP, TCP, UDP, ICMP
+from scapy.packet import Raw
+
+captured = []
+
+def proto_name(proto_num):
+    if proto_num == 6:
+        return "TCP"
+    if proto_num == 17:
+        return "UDP"
+    if proto_num == 1:
+        return "ICMP"
+    return str(proto_num)
+
+def analyze_packet(packet):
+    # only consider IP packets
+    if packet.haslayer(IP):
+        ip = packet[IP]
+        src_ip = ip.src
+        dst_ip = ip.dst
+        proto = proto_name(ip.proto)
+
+        print("\n[+] Packet Captured")
+        print(f"Source IP: {src_ip}")
+        print(f"Destination IP: {dst_ip}")
+        print(f"Protocol: {proto}")
+
+        if packet.haslayer(Raw):
+            payload = packet[Raw].load
+            # show first 50 bytes; try decode for readability but fall back to raw bytes
+            try:
+                text = payload[:50].decode("utf-8", errors="replace")
+                print(f"Payload (first 50 bytes decoded): {text}")
+            except Exception:
+                print(f"Payload (first 50 bytes raw): {payload[:50]}")
+
+    # store every packet so we can write to a pcap on exit
+    captured.append(packet)
+
+if _name_ == "_main_":
+    iface = conf.iface  # default interface (you can set e.g. "wlan0" or "eth0")
+    print(f"Starting packet capture on interface: {iface}. Press Ctrl+C to stop.\n")
+    try:
+        sniff(prn=analyze_packet, store=False, iface=iface)
+    except KeyboardInterrupt:
+        print("\nStopping capture, writing capture.pcap ...")
+        try:
+            wrpcap("capture.pcap", captured)
+            print("Saved capture.pcap")
+        except Exception as e:
+            print("Failed to save pcap:", e)
